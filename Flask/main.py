@@ -1,14 +1,17 @@
-from cgitb import reset
-from click import password_option
 from cryptography.fernet import Fernet, MultiFernet
 from flask import Flask, render_template, request
 import json
 import sqlite3
 from datetime import datetime
+import os
+cwd = os.getcwd()
+database_dir = cwd+'/DB/'
+data_dir = cwd+'/Data/'
 
-app = Flask(__name__, template_folder=r'/Users/sivasubramaniyan.k/Git_Codes/DEV/Flask/templates/')
+app = Flask(__name__, template_folder=cwd+'/templates/')
 
-DataBase = "/Users/sivasubramaniyan.k/Git_Codes/DEV/Flask/DB/vault.db"
+
+DataBase = "vault.db"
 user_table = 'users'
 creds_table = 'creds'
 time = str(datetime.now())
@@ -46,10 +49,10 @@ def signup():
         "Created_Time": time
     }
 
-    with open("/Users/sivasubramaniyan.k/Git_Codes/DEV/Flask/Data/%s.json" %username, 'w') as file:
+    with open(data_dir+"/%s.json" %username, 'w') as file:
         json.dump(data, file)
     try:
-        connection = sqlite3.connect("/Users/sivasubramaniyan.k/Git_Codes/DEV/Flask/DB/vault.db")
+        connection = sqlite3.connect(database_dir+"vault.db")
         cur = connection.cursor()
         db_count = cur.execute("select count(*) from users;").fetchone()[0]
         sqlite_insert_with_param = f"""INSERT INTO '{user_table}'(id, username, email, firstname, lastname, mobile, password, key, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);"""
@@ -68,12 +71,11 @@ def signup():
 
 @app.route('/login', methods=['POST', 'GET'])
 def login():
-    global login_username
     login_username = request.form.get("username")
     password = request.form.get("password")
     print(login_username)
     print(password)
-    connection = sqlite3.connect(DataBase)
+    connection = sqlite3.connect(database_dir+DataBase)
     cur = connection.cursor()
     try:
         db_fetch_name = cur.execute(f"select * from '{user_table}' where username = '{login_username}' ;").fetchone()[1]
@@ -91,33 +93,25 @@ def login():
             print("Login Success")
             result = "Login Success"
             return render_template("dbcreds.html")
-        else:
-            print("Please check the password you mentioned")
-            result = "Please check the password you Entered"
             return result
 
     except TypeError:
         print("No Matchign records found...")
         print("User does not exixts")
         result = "User does not exists"
-        return result
+        return result  
 
-        
-
-    
+print(data_dir+DataBase+creds_table)
 
 @app.route('/add_entry', methods=['POST', 'GET'])
 def add_entry():
-    
-    username = login.login_username
-    print("component page username: ",username)
-    connection = sqlite3.connect(DataBase)
+    connection = sqlite3.connect(database_dir+DataBase)
     cur = connection.cursor()
     component_name = request.form.get('name')
     print("component name:",component_name)
     password = request.form.get('password')
     print("component password: ",password)
-    db_count = cur.execute(f"select count(*) from '{creds_table}';").fetchone()[0]
+    db_count = cur.execute(f"select count(*) from creds;").fetchone()[0]
     connection.commit()
     connection.close()
     dbpass = password.encode()
@@ -125,10 +119,10 @@ def add_entry():
     f = Fernet(key)
     id = db_count + 1
     encrypted = f.encrypt(dbpass)
-    data_tuple = (id,username,component_name,encrypted,key,time)
-    query = f"insert into '{creds_table}' (id, username,component, password, key, created) values(?,?,?,?,?,?);"
+    data_tuple = (id,component_name,encrypted, key, time)
+    query = f"insert into creds (id,component, password, key, created) values(?,?,?,?,?);"
     try:
-        connection = sqlite3.connect(DataBase)
+        connection = sqlite3.connect(database_dir+DataBase)
         cur = connection.cursor()
         cur.execute(query, data_tuple)
         connection.commit()
@@ -137,6 +131,33 @@ def add_entry():
         result = "Error"
     return render_template("dbcreds.html")
 
+@app.route('/fetch', methods=['POST', 'GET'])
+def fetch():
+    return render_template("fetch.html")
+
+@app.route('/get', methods=['POST', 'GET'])
+def get():
+    component = request.form.get('name')
+    print(component)
+    try:
+        connection = sqlite3.connect(database_dir+DataBase)
+        cur = connection.cursor()
+        print("Match Found...")
+        my_password = cur.execute(f"select password from creds where component = '{component}';").fetchone()[0]
+        print(type(my_password))
+        
+        key = cur.execute(f" select key from creds where component = '{component}';").fetchone()[0]
+        f = Fernet(key)
+        decMessage = f.decrypt(my_password).decode()
+        print("Password: ",decMessage)
+        connection.close()
+        return decMessage
+
+
+    except TypeError:
+        print("No Matchign records found...")
+
+    return "No Matchign records found..."
 
 
 if __name__ == "__main__":

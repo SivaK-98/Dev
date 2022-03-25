@@ -1,0 +1,10 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "database": "${workspaceFolder:Flask}/DB/vault.db",
+            "name": "vault db"
+        }
+    ]
+}
